@@ -20,6 +20,7 @@
 #include "main.h"
 #include "usb_host.h"
 #include "strings.h"
+#include "ringbuffer.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -33,12 +34,23 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define DMA_RxBUF_SIZE 10
-#define RXBuf_SIZE 2*DMA_RxBUF_SIZE
 
-uint8_t dmaUartRxBuff[DMA_RxBUF_SIZE];
-uint8_t rxUartBuff[RXBuf_SIZE];
-uint16_t rxUartSize=0;
+#define RING_BUFF_SIZE 8 /*must be power of 2*/
+#define UART_RX_DMA_BUFF_SIZE 512
+
+//#define DMA_RxBUF_SIZE 10
+//#define RXBuf_SIZE 2*DMA_RxBUF_SIZE
+
+
+ring_buffer_t uart_rx_ringbuff_hdl;
+uint8_t uart_rx_ringbuff_memory[RING_BUFF_SIZE];
+
+uint8_t dma_uart_rx_buff[UART_RX_DMA_BUFF_SIZE];
+
+
+//uint8_t dmaUartRxBuff[DMA_RxBUF_SIZE];
+//uint8_t rxUartBuff[RXBuf_SIZE];
+//uint16_t rxUartSize=0;
 
 
 /* USER CODE END PD */
@@ -81,14 +93,17 @@ void MX_USB_HOST_Process(void);
 // call back when uart irq
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 	if(huart->Instance==USART1){
-		memccpy(rxUartBuff,dmaUartRxBuff,Size);
-		rxUartSize=Size;
+//		memccpy(rxUartBuff,dmaUartRxBuff,Size);
+//		rxUartSize=Size;
 
-		HAL_UART_Transmit_DMA(&huart1, rxUartBuff, rxUartSize);
+		//HAL_UART_Transmit_DMA(&huart1, rxUartBuff, rxUartSize);
+
+		 /* Add array to ring */
+		 ring_buffer_queue_arr(&uart_rx_ringbuff_hdl,dma_uart_rx_buff,Size);
 
 		//enable again
 
-		HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dmaUartRxBuff, sizeof(dmaUartRxBuff));// enable all irq related to
+		HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dma_uart_rx_buff, sizeof(dma_uart_rx_buff));// enable all irq related to
 		  __HAL_DMA_DISABLE_IT(&hdma_usart1_rx,DMA_IT_HT);// dsiable half buffer dma irq
 
 
@@ -125,8 +140,10 @@ int main(void)
   MX_USB_HOST_Init();
   /* USER CODE BEGIN 2 */
 
+  ring_buffer_init(&uart_rx_ringbuff_hdl, uart_rx_ringbuff_memory, sizeof(uart_rx_ringbuff_memory));
+
   //whenever the dma buffer is full or the tx line is idle for one frame time ( 1 byte time) --> the uart irq will be call
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dmaUartRxBuff, sizeof(dmaUartRxBuff));// enable all irq related to
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dma_uart_rx_buff, sizeof(dma_uart_rx_buff));// enable all irq related to
   __HAL_DMA_DISABLE_IT(&hdma_usart1_rx,DMA_IT_HT);// dsiable half buffer dma irq
 
 
