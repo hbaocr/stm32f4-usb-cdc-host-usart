@@ -19,21 +19,37 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "usb_host.h"
-#include "strings.h"
-#include "ringbuffer.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "debugprint.h"
+#include "usbh_core.h"
+#include "usbh_cdc.h"
 
+#include "strings.h"
+#include "ringbuffer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+extern USBH_HandleTypeDef hUsbHostFS;
+extern ApplicationTypeDef Appli_state;
+USBH_StatusTypeDef usbresult;
 
-/* USER CODE END PTD */
+#define RX_BUFF_SIZE   64  /* Max Received data 1KB */
 
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
+uint8_t CDC_RX_Buffer[RX_BUFF_SIZE];
+uint8_t CDC_TX_Buffer[RX_BUFF_SIZE];
+
+typedef enum {
+  CDC_STATE_IDLE = 0,
+  CDC_SEND,
+  CDC_RECEIVE,
+}CDC_StateTypedef;
+
+CDC_StateTypedef CDC_STATE = CDC_STATE_IDLE;
+
+
 
 #define RING_BUFF_SIZE 8 /*must be power of 2*/
 #define UART_RX_DMA_BUFF_SIZE 512
@@ -44,13 +60,12 @@
 
 ring_buffer_t uart_rx_ringbuff_hdl;
 uint8_t uart_rx_ringbuff_memory[RING_BUFF_SIZE];
-
 uint8_t dma_uart_rx_buff[UART_RX_DMA_BUFF_SIZE];
+/* USER CODE END PTD */
 
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
 
-//uint8_t dmaUartRxBuff[DMA_RxBUF_SIZE];
-//uint8_t rxUartBuff[RXBuf_SIZE];
-//uint16_t rxUartSize=0;
 
 
 /* USER CODE END PD */
@@ -83,7 +98,13 @@ void MX_USB_HOST_Process(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/* USER CODE END 0 */
+//https://controllerstech.com/uart-transmit-in-stm32/
+char tmpbuf[512];
+
+void uart1_tx_poll(uint8_t *data, uint16_t sz ){
+	uint32_t timeout_ms=10;
+	HAL_UART_Transmit (&huart1, data, sz, timeout_ms);
+}
 
 /**
   * @brief  The application entry point.
@@ -111,6 +132,30 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 
 }
 
+void CDC_HANDLER(){
+	static ApplicationTypeDef old;
+	if(old != Appli_state){
+
+		int n= sprintf(tmpbuf,"Change state from %d to %d \n",old,Appli_state);
+		old=Appli_state;
+		uart1_tx_poll(tmpbuf,n);
+	}
+
+}
+
+//int __io_putchar(int ch)
+//{
+// // Write character to ITM ch.0
+// ITM_SendChar(ch);
+// return(ch);
+//}
+
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -146,6 +191,9 @@ int main(void)
   HAL_UARTEx_ReceiveToIdle_DMA(&huart1, dma_uart_rx_buff, sizeof(dma_uart_rx_buff));// enable all irq related to
   __HAL_DMA_DISABLE_IT(&hdma_usart1_rx,DMA_IT_HT);// dsiable half buffer dma irq
 
+  HAL_Delay(1000);
+
+
 
   /* USER CODE END 2 */
 
@@ -153,8 +201,10 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	//printf("Debug print form SWO");
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
+    CDC_HANDLER();
 
     /* USER CODE BEGIN 3 */
   }
@@ -273,6 +323,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);

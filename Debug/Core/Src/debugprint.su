@@ -1,0 +1,2 @@
+../Drivers/CMSIS/Include/core_cm4.h:2064:26:ITM_SendChar	16	static,ignoring_inline_asm
+../Core/Src/debugprint.c:35:1:__io_putchar	16	static

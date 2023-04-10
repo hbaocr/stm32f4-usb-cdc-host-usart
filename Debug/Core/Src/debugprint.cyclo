@@ -1,0 +1,2 @@
+core_cm4.h:2064:26:ITM_SendChar	4
+debugprint.c:35:1:__io_putchar	1
